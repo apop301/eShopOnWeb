@@ -21,7 +21,7 @@ stages:
   displayName: "Build Stage"
   jobs:
   - job: BuildJob
-    displayName: "Build and Publish"
+    displayName: "Build and Publish App"
     steps:
 
     - task: UseDotNet@2
@@ -43,11 +43,12 @@ stages:
         projects: '**/*.csproj'
         arguments: '--configuration $(buildConfiguration)'
 
+    # Publish DOAR proiectul Web, ca să avem un singur ZIP
     - task: DotNetCoreCLI@2
-      displayName: "Publish"
+      displayName: "Publish Web App"
       inputs:
         command: 'publish'
-        publishWebProjects: true
+        projects: 'src/Web/Web.csproj'     # <-- fix esențial
         arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)'
         zipAfterPublish: true
 
@@ -67,9 +68,8 @@ stages:
 
   jobs:
   - deployment: DeployWeb
-    displayName: "Deploy to Azure App Service"
-    
-    environment: "eShopOnWeb-dev"
+    displayName: "Deploy to Azure WebApp"
+    environment: "eShopOnWeb-dev"   # creează automat Environment-ul
 
     strategy:
       runOnce:
@@ -77,7 +77,7 @@ stages:
           steps:
 
           - task: DownloadBuildArtifacts@1
-            displayName: "Download build artifacts"
+            displayName: "Download Build Artifact"
             inputs:
               buildType: 'current'
               downloadType: 'single'
@@ -87,7 +87,7 @@ stages:
           - task: AzureWebApp@1
             displayName: "Deploy to WebApp"
             inputs:
-              azureSubscription: "eshop-connection"
+              azureSubscription: "eshop-connection"   # <-- pune aici NUMELE nou al service connection-ului
               appType: "webAppLinux"
               appName: "eShopOnWeb"
               package: "$(System.ArtifactsDirectory)/drop/*.zip"
