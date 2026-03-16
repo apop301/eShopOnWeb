@@ -12,48 +12,82 @@ pool:
 variables:
   buildConfiguration: 'Release'
 
-steps:
-# 1. Instalează SDK-ul corect pentru eShopOnWeb (.NET 8)
-- task: UseDotNet@2
-  inputs:
-    packageType: 'sdk'
-    version: '8.x'
+stages:
 
-# 2. Restore
-- task: DotNetCoreCLI@2
-  displayName: 'Restore packages'
-  inputs:
-    command: 'restore'
-    projects: '**/*.csproj'
+# ================================
+# 1️⃣ BUILD STAGE
+# ================================
+- stage: Build
+  displayName: "Build Stage"
+  jobs:
+  - job: BuildJob
+    displayName: "Build and Publish"
+    steps:
 
-# 3. Build
-- task: DotNetCoreCLI@2
-  displayName: 'Build solution'
-  inputs:
-    command: 'build'
-    projects: '**/*.csproj'
-    arguments: '--configuration $(buildConfiguration)'
+    - task: UseDotNet@2
+      displayName: "Install .NET 8 SDK"
+      inputs:
+        packageType: 'sdk'
+        version: '8.x'
 
-# 4. Test
-- task: DotNetCoreCLI@2
-  displayName: 'Run tests'
-  inputs:
-    command: 'test'
-    projects: '**/*Tests/*.csproj'
-    arguments: '--configuration $(buildConfiguration)'
+    - task: DotNetCoreCLI@2
+      displayName: "Restore"
+      inputs:
+        command: 'restore'
+        projects: '**/*.csproj'
 
-# 5. Publish WebApp
-- task: DotNetCoreCLI@2
-  displayName: 'Publish WebApp'
-  inputs:
-    command: 'publish'
-    publishWebProjects: true
-    arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)'
-    zipAfterPublish: true
+    - task: DotNetCoreCLI@2
+      displayName: "Build"
+      inputs:
+        command: 'build'
+        projects: '**/*.csproj'
+        arguments: '--configuration $(buildConfiguration)'
 
-# 6. Publică artifact‑ul
-- task: PublishBuildArtifacts@1
-  displayName: 'Publish artifacts'
-  inputs:
-    pathtoPublish: '$(Build.ArtifactStagingDirectory)'
-    artifactName: 'drop'
+    - task: DotNetCoreCLI@2
+      displayName: "Publish"
+      inputs:
+        command: 'publish'
+        publishWebProjects: true
+        arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)'
+        zipAfterPublish: true
+
+    - task: PublishBuildArtifacts@1
+      displayName: "Publish Artifact"
+      inputs:
+        pathtoPublish: '$(Build.ArtifactStagingDirectory)'
+        artifactName: 'drop'
+
+
+# ================================
+# 2️⃣ DEPLOY STAGE
+# ================================
+- stage: Deploy
+  displayName: "Deploy Stage"
+  dependsOn: Build
+
+  jobs:
+  - deployment: DeployWeb
+    displayName: "Deploy to Azure App Service"
+    
+    environment: "eShopOnWeb-dev"
+
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+
+          - task: DownloadBuildArtifacts@1
+            displayName: "Download build artifacts"
+            inputs:
+              buildType: 'current'
+              downloadType: 'single'
+              artifactName: 'drop'
+              downloadPath: '$(System.ArtifactsDirectory)'
+
+          - task: AzureWebApp@1
+            displayName: "Deploy to WebApp"
+            inputs:
+              azureSubscription: "Azure subscription 1(9de0d732-3963-46b8-8e5c-ec8b8b6fe753)"
+              appType: "webAppLinux"
+              appName: "eShopOnWeb"
+              package: "$(System.ArtifactsDirectory)/drop/*.zip"
