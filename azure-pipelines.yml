@@ -43,7 +43,7 @@ stages:
         projects: '**/*.csproj'
         arguments: '--configuration $(buildConfiguration)'
 
-    # Publish DOAR proiectul Web, FĂRĂ zip
+    # Publish DOAR Web App (fără multe zip-uri)
     - task: DotNetCoreCLI@2
       displayName: "Publish Web App"
       inputs:
@@ -51,7 +51,7 @@ stages:
         projects: 'src/Web/Web.csproj'
         arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)'
 
-    # Creăm noi ZIP-ul ca să fie EXACT 1 fișier
+    # Creăm 1 singur ZIP
     - script: |
         cd $(Build.ArtifactStagingDirectory)
         zip -r eShopOnWeb.zip .
@@ -65,16 +65,16 @@ stages:
 
 
 # ================================
-# 2️⃣ DEPLOY STAGE
+# 2️⃣ TEST DEPLOYMENT STAGE
 # ================================
-- stage: Deploy
-  displayName: "Deploy Stage"
+- stage: Test
+  displayName: "Deploy to Test Environment"
   dependsOn: Build
 
   jobs:
-  - deployment: DeployWeb
-    displayName: "Deploy to Azure WebApp"
-    environment: "eShopOnWeb-dev"
+  - deployment: DeployTest
+    displayName: "Deploy to Test WebApp"
+    environment: "eShop-Test"     # Environment TEST
 
     strategy:
       runOnce:
@@ -82,7 +82,7 @@ stages:
           steps:
 
           - task: DownloadBuildArtifacts@1
-            displayName: "Download Build Artifact"
+            displayName: "Download Artifact"
             inputs:
               buildType: 'current'
               downloadType: 'single'
@@ -90,9 +90,43 @@ stages:
               downloadPath: '$(System.ArtifactsDirectory)'
 
           - task: AzureWebApp@1
-            displayName: "Deploy to WebApp"
+            displayName: "Deploy to Test AppService"
             inputs:
-              azureSubscription: "eshop-connection"   # ← numele service connection-ului tău
+              azureSubscription: "eshop-connection"   # ← numele SERVICE CONNECTION
               appType: "webAppLinux"
-              appName: "eShopOnWeb"
+              appName: "eShopOnWeb-Test"      # ← NUMELE APP SERVICE TEST
+              package: "$(System.ArtifactsDirectory)/drop/eShopOnWeb.zip"
+
+
+# ================================
+# 3️⃣ PRODUCTION DEPLOYMENT STAGE
+# ================================
+- stage: Production
+  displayName: "Deploy to Production Environment"
+  dependsOn: Test
+
+  jobs:
+  - deployment: DeployProd
+    displayName: "Deploy to Production WebApp"
+    environment: "eShop-Prod"     # Environment PROD
+
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+
+          - task: DownloadBuildArtifacts@1
+            displayName: "Download Artifact"
+            inputs:
+              buildType: 'current'
+              downloadType: 'single'
+              artifactName: 'drop'
+              downloadPath: '$(System.ArtifactsDirectory)'
+
+          - task: AzureWebApp@1
+            displayName: "Deploy to Production AppService"
+            inputs:
+              azureSubscription: "eshop-connection"   # ← numele SERVICE CONNECTION
+              appType: "webAppLinux"
+              appName: "eShopOnWeb"          # ← NUMELE APP SERVICE PROD
               package: "$(System.ArtifactsDirectory)/drop/eShopOnWeb.zip"
