@@ -87,7 +87,7 @@ stages:
           - task: AzureWebApp@1
             displayName: "Deploy to WebApp"
             inputs:
-              azureSubscription: "Azure subscription 19de0d732-3963-46b8-8e5c-ec8b8b6fe753"
+              azureSubscription: "eshop-connection"
               appType: "webAppLinux"
               appName: "eShopOnWeb"
               package: "$(System.ArtifactsDirectory)/drop/*.zip"
