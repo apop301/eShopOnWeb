@@ -117,7 +117,7 @@ stages:
 
                 echo "Creating Test WebApp..."
                 az webapp create \
-                  --name eShopOnWeb-Test \
+                  --name eShopOnWeb-AlbertP-Test \
                   --resource-group $(testRG) \
                   --plan $(testPlan) \
                   --runtime "DOTNET:8.0"
@@ -176,7 +176,7 @@ stages:
 
                 echo "Creating Production WebApp..."
                 az webapp create \
-                  --name eShopOnWeb \
+                  --name eShopOnWeb-AlbertP \
                   --resource-group $(prodRG) \
                   --plan $(prodPlan) \
                   --runtime "DOTNET:8.0"
