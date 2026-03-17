@@ -11,122 +11,188 @@ pool:
 
 variables:
   buildConfiguration: 'Release'
+  location: 'westeurope'
+
+  # Resource Groups
+  testRG: 'eShopOnWeb-Test-RG'
+  prodRG: 'eShopOnWeb-Prod-RG'
+
+  # App Service Plans (BASIC SKU)
+  testPlan: 'eShopOnWeb-Test-Plan'
+  prodPlan: 'eShopOnWeb-Prod-Plan'
 
 stages:
 
-# ================================
+# ==========================
 # 1️⃣ BUILD STAGE
-# ================================
+# ==========================
 - stage: Build
-  displayName: "Build Stage"
+  displayName: "Build & Test"
+
   jobs:
   - job: BuildJob
-    displayName: "Build and Publish App"
+    displayName: "Build Application"
+
     steps:
 
     - task: UseDotNet@2
-      displayName: "Install .NET 8 SDK"
       inputs:
         packageType: 'sdk'
         version: '8.x'
 
     - task: DotNetCoreCLI@2
-      displayName: "Restore"
+      displayName: Restore
       inputs:
         command: 'restore'
         projects: '**/*.csproj'
 
     - task: DotNetCoreCLI@2
-      displayName: "Build"
+      displayName: Build
       inputs:
         command: 'build'
         projects: '**/*.csproj'
         arguments: '--configuration $(buildConfiguration)'
 
-    # Publish DOAR Web App (fără multe zip-uri)
     - task: DotNetCoreCLI@2
-      displayName: "Publish Web App"
+      displayName: Run Tests
       inputs:
-        command: 'publish'
+        command: 'test'
+        projects: '**/*Tests/*.csproj'
+
+    # Publish Web App
+    - task: DotNetCoreCLI@2
+      displayName: Publish Web
+      inputs:
+        command: publish
         projects: 'src/Web/Web.csproj'
         arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)'
 
-    # Creăm 1 singur ZIP
+    # Create clean ZIP
     - script: |
         cd $(Build.ArtifactStagingDirectory)
         zip -r eShopOnWeb.zip .
-      displayName: "Create single ZIP"
+      displayName: "Package ZIP"
 
     - task: PublishBuildArtifacts@1
       displayName: "Publish Artifact"
       inputs:
-        pathtoPublish: '$(Build.ArtifactStagingDirectory)'
-        artifactName: 'drop'
+        pathtoPublish: "$(Build.ArtifactStagingDirectory)"
+        artifactName: "drop"
 
 
-# ================================
-# 2️⃣ TEST DEPLOYMENT STAGE
-# ================================
+# ==========================
+# 2️⃣ TEST STAGE — IaC + Deploy
+# ==========================
 - stage: Test
-  displayName: "Deploy to Test Environment"
   dependsOn: Build
+  displayName: "Provision Test Infra & Deploy"
 
   jobs:
   - deployment: DeployTest
-    displayName: "Deploy to Test WebApp"
-    environment: "eShop-Test"     # Environment TEST
+    displayName: "Deploy to Test"
+    environment: "eShopOnWeb-Test"
 
     strategy:
       runOnce:
         deploy:
           steps:
 
+          # CREATE TEST INFRASTRUCTURE (IaC)
+          - task: AzureCLI@2
+            displayName: "Create Test Infrastructure"
+            inputs:
+              azureSubscription: "eshop-connection"
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                echo "Creating Test Resource Group..."
+                az group create --name $(testRG) --location $(location)
+
+                echo "Creating Test App Service Plan (B1)..."
+                az appservice plan create \
+                  --name $(testPlan) \
+                  --resource-group $(testRG) \
+                  --sku B1 \
+                  --is-linux
+
+                echo "Creating Test WebApp..."
+                az webapp create \
+                  --name eShopOnWeb-Test \
+                  --resource-group $(testRG) \
+                  --plan $(testPlan) \
+                  --runtime "DOTNET:8.0"
+
+          # DOWNLOAD ARTIFACT
           - task: DownloadBuildArtifacts@1
-            displayName: "Download Artifact"
             inputs:
               buildType: 'current'
-              downloadType: 'single'
               artifactName: 'drop'
               downloadPath: '$(System.ArtifactsDirectory)'
 
+          # DEPLOY TEST
           - task: AzureWebApp@1
-            displayName: "Deploy to Test AppService"
+            displayName: "Deploy to Test WebApp"
             inputs:
-              azureSubscription: "eshop-connection"   # ← numele SERVICE CONNECTION
+              azureSubscription: "eshop-connection"
               appType: "webAppLinux"
-              appName: "eShopOnWeb-Test"      # ← NUMELE APP SERVICE TEST
+              appName: "eShopOnWeb-Test"
               package: "$(System.ArtifactsDirectory)/drop/eShopOnWeb.zip"
 
 
-# ================================
-# 3️⃣ PRODUCTION DEPLOYMENT STAGE
-# ================================
+# ==========================
+# 3️⃣ PRODUCTION STAGE — IaC + Deploy
+# ==========================
 - stage: Production
-  displayName: "Deploy to Production Environment"
   dependsOn: Test
+  displayName: "Provision Prod Infra & Deploy"
 
   jobs:
   - deployment: DeployProd
-    displayName: "Deploy to Production WebApp"
-    environment: "eShop-Prod"     # Environment PROD
+    displayName: "Deploy to Prod"
+    environment: "eShopOnWeb-Prod"
 
     strategy:
       runOnce:
         deploy:
           steps:
 
+          # CREATE PROD INFRASTRUCTURE (IaC)
+          - task: AzureCLI@2
+            displayName: "Create Prod Infrastructure"
+            inputs:
+              azureSubscription: "eshop-connection"
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                echo "Creating Production Resource Group..."
+                az group create --name $(prodRG) --location $(location)
+
+                echo "Creating Production App Service Plan (B1)..."
+                az appservice plan create \
+                  --name $(prodPlan) \
+                  --resource-group $(prodRG) \
+                  --sku B1 \
+                  --is-linux
+
+                echo "Creating Production WebApp..."
+                az webapp create \
+                  --name eShopOnWeb \
+                  --resource-group $(prodRG) \
+                  --plan $(prodPlan) \
+                  --runtime "DOTNET:8.0"
+
+          # DOWNLOAD ARTIFACT
           - task: DownloadBuildArtifacts@1
-            displayName: "Download Artifact"
             inputs:
               buildType: 'current'
-              downloadType: 'single'
               artifactName: 'drop'
               downloadPath: '$(System.ArtifactsDirectory)'
 
+          # DEPLOY PROD
           - task: AzureWebApp@1
-            displayName: "Deploy to Production AppService"
+            displayName: "Deploy to Prod WebApp"
             inputs:
-              azureSubscription: "eshop-connection"   # ← numele SERVICE CONNECTION
+              azureSubscription: "eshop-connection"
               appType: "webAppLinux"
-              appName: "eShopOnWeb"          # ← NUMELE APP SERVICE PROD
+              appName: "eShopOnWeb"
               package: "$(System.ArtifactsDirectory)/drop/eShopOnWeb.zip"
