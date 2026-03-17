@@ -120,7 +120,7 @@ stages:
                   --name eShopOnWeb-AlbertP-Test \
                   --resource-group $(testRG) \
                   --plan $(testPlan) \
-                  --runtime "DOTNET|:8.0"
+                  --runtime "DOTNETCORE|8.0""
 
           # DOWNLOAD ARTIFACT
           - task: DownloadBuildArtifacts@1
@@ -179,7 +179,7 @@ stages:
                   --name eShopOnWeb-AlbertP \
                   --resource-group $(prodRG) \
                   --plan $(prodPlan) \
-                  --runtime "DOTNET|:8.0"
+                  --runtime "DOTNETCORE|8.0""
 
           # DOWNLOAD ARTIFACT
           - task: DownloadBuildArtifacts@1
