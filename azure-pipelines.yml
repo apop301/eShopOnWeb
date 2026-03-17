@@ -101,7 +101,7 @@ stages:
           - task: AzureCLI@2
             displayName: "Create Test Infrastructure"
             inputs:
-              azureSubscription: "eshop-connection"
+              azureSubscription: "eshop-connection-auto"
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |
@@ -192,7 +192,7 @@ stages:
           - task: AzureWebApp@1
             displayName: "Deploy to Prod WebApp"
             inputs:
-              azureSubscription: "eshop-connection"
+              azureSubscription: "eshop-connection-auto"
               appType: "webAppLinux"
               appName: "eShopOnWeb"
               package: "$(System.ArtifactsDirectory)/drop/eShopOnWeb.zip"
